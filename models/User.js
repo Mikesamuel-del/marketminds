@@ -38,11 +38,29 @@ const userSchema = new mongoose.Schema(
       type: String,
     },
 
+    /** Referrer's public code entered at signup (legacy / bonus lookup). */
     referredBy: {
       type: String,
     },
 
+    /** Direct link to the referrer document for analytics and counting. */
+    referrerId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+
     referral: {
+      type: Number,
+      default: 0,
+    },
+
+    referrals: {
+      type: Number,
+      default: 0,
+    },
+
+    referralCount: {
       type: Number,
       default: 0,
     },
@@ -51,6 +69,61 @@ const userSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+
+    resetPasswordToken: {
+      type: String,
+    },
+
+    resetPasswordExpire: {
+      type: Date,
+    },
+
+    transactions: [
+      {
+        type: {
+          type: String,
+        },
+
+        direction: {
+          type: String,
+        },
+
+        amount: {
+          type: Number,
+        },
+
+        currency: {
+          type: String,
+          default: "KES",
+        },
+
+        status: {
+          type: String,
+          default: "complete",
+        },
+
+        source: {
+          type: String,
+        },
+
+        reference: {
+          type: String,
+        },
+
+        note: {
+          type: String,
+        },
+
+        meta: {
+          type: Object,
+        },
+
+        createdAt: {
+          type: Date,
+          default: Date.now,
+        },
+      },
+    ],
   },
   {
     timestamps: true,
