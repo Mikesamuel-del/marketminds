@@ -2,8 +2,35 @@ const User = require("../models/User");
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
+const { sendMail } = require("../utils/sendEmail");
 
 const JWT_SECRET = process.env.JWT_SECRET || "marketmindssecret";
+
+const escapeRegex = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** Collision-resistant referral codes (uppercase alphanumeric). */
+const generateUniqueReferralCode = async () => {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  for (let attempt = 0; attempt < 16; attempt += 1) {
+    let code = "";
+    const bytes = crypto.randomBytes(8);
+    for (let j = 0; j < 8; j += 1) {
+      code += chars[bytes[j] % chars.length];
+    }
+    const exists = await User.exists({ referralCode: code });
+    if (!exists) return code;
+  }
+  throw new Error("Could not generate referral code");
+};
+
+const resolveReferrerByCode = async (codeRaw) => {
+  const trimmed = codeRaw && String(codeRaw).trim();
+  if (!trimmed) return null;
+  return User.findOne({
+    referralCode: { $regex: new RegExp(`^${escapeRegex(trimmed)}$`, "i") },
+  });
+};
 
 const sanitizeUserForClient = (user) => ({
   id: user._id,
@@ -13,6 +40,7 @@ const sanitizeUserForClient = (user) => ({
   balance: user.balance,
   package: user.package,
   referralCode: user.referralCode,
+  referralCount: user.referralCount ?? user.referrals ?? 0,
 });
 
 const getPackageRules = (packageType) => {
@@ -74,30 +102,66 @@ const registerUser = async (req, res) => {
       });
     }
 
-    // GENERATE REFERRAL CODE
-    const referralCode = Math.random()
-      .toString(36)
-      .substring(2, 8);
+    let referrerDoc = null;
+    const refInput =
+      referredBy && String(referredBy).trim()
+        ? String(referredBy).trim()
+        : null;
 
-    // HASH PASSWORD
-    const hashedPassword = await bcrypt.hash(
-      password,
-      10
-    );
+    if (refInput) {
+      referrerDoc = await resolveReferrerByCode(refInput);
+      if (!referrerDoc) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid referral code",
+        });
+      }
 
-    // CREATE USER
+      if (
+        referrerDoc.email &&
+        String(referrerDoc.email).toLowerCase() ===
+          String(email).toLowerCase()
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "You cannot refer yourself",
+        });
+      }
+
+      if (
+        referrerDoc.phone &&
+        String(referrerDoc.phone).trim() === String(phone).trim()
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "You cannot refer yourself",
+        });
+      }
+    }
+
+    const referralCode = await generateUniqueReferralCode();
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
     const user = new User({
       name,
       email,
       phone,
       password: hashedPassword,
-      referredBy,
+      referredBy: referrerDoc ? referrerDoc.referralCode : undefined,
+      referrerId: referrerDoc ? referrerDoc._id : null,
       referralCode,
       balance: 0,
       package: "none",
+      referralCount: 0,
     });
 
     await user.save();
+
+    if (referrerDoc) {
+      referrerDoc.referralCount = (referrerDoc.referralCount || 0) + 1;
+      await referrerDoc.save();
+    }
 
     const token = jwt.sign({ id: user._id }, JWT_SECRET, {
       expiresIn: "7d",
@@ -187,9 +251,7 @@ const createUser = async (req, res) => {
   try {
     const { name, email, referredBy } = req.body;
 
-    const referralCode = Math.random()
-      .toString(36)
-      .substring(2, 8);
+    const referralCode = await generateUniqueReferralCode();
 
     const user = new User({
       name,
@@ -198,6 +260,7 @@ const createUser = async (req, res) => {
       referralCode,
       balance: 0,
       package: "none",
+      referralCount: 0,
     });
 
     await user.save();
@@ -229,7 +292,9 @@ const getUser = async (req, res) => {
       });
     }
 
-    const user = await User.findById(id);
+    const user = await User.findById(id).select(
+      "-password -resetPasswordToken -resetPasswordExpire"
+    );
 
     if (!user) {
       return res.status(404).json({
@@ -443,32 +508,33 @@ const buyPackage = async (req, res) => {
       meta: { packageType },
     });
 
-    // REFERRAL BONUS
-    if (user.referredBy) {
-      const referrer = await User.findOne({
-        referralCode: user.referredBy,
+    // REFERRAL BONUS (prefer explicit referrerId; fall back to legacy code match)
+    let referrer = null;
+    if (user.referrerId) {
+      referrer = await User.findById(user.referrerId);
+    }
+    if (!referrer && user.referredBy) {
+      referrer = await resolveReferrerByCode(user.referredBy);
+    }
+
+    if (referrer) {
+      const bonus = referralEarnings[packageType];
+
+      referrer.balance += bonus;
+
+      referrer.referral =
+        (referrer.referral || 0) + bonus;
+
+      await pushTransaction(referrer, {
+        type: "referral_bonus",
+        direction: "credit",
+        amount: bonus,
+        currency: "KES",
+        status: "complete",
+        source: "system",
+        note: `Referral bonus from ${user.email}`,
+        meta: { fromUserId: user._id, packageType },
       });
-
-      if (referrer) {
-        const bonus =
-          referralEarnings[packageType];
-
-        referrer.balance += bonus;
-
-        referrer.referral =
-          (referrer.referral || 0) + bonus;
-
-        await pushTransaction(referrer, {
-          type: "referral_bonus",
-          direction: "credit",
-          amount: bonus,
-          currency: "KES",
-          status: "complete",
-          source: "system",
-          note: `Referral bonus from ${user.email}`,
-          meta: { fromUserId: user._id, packageType },
-        });
-      }
     }
 
     res.json({
@@ -483,6 +549,144 @@ const buyPackage = async (req, res) => {
 
     res.status(500).json({
       error: "Purchase failed",
+    });
+  }
+};
+
+// =====================================
+// FORGOT PASSWORD
+// =====================================
+const forgotPassword = async (req, res) => {
+  const genericMessage =
+    "If an account exists for that email, we sent reset instructions.";
+
+  try {
+    const { email } = req.body;
+
+    if (!email || !String(email).trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Email is required",
+      });
+    }
+
+    const normalized = String(email).trim().toLowerCase();
+
+    const user = await User.findOne({
+      email: { $regex: new RegExp(`^${escapeRegex(normalized)}$`, "i") },
+    });
+
+    // Same response whether or not the user exists (avoid email enumeration)
+    if (!user) {
+      return res.json({ success: true, message: genericMessage });
+    }
+
+    const resetToken = crypto.randomBytes(32).toString("hex");
+    const hashedToken = crypto
+      .createHash("sha256")
+      .update(resetToken)
+      .digest("hex");
+
+    user.resetPasswordToken = hashedToken;
+    user.resetPasswordExpire = new Date(Date.now() + 60 * 60 * 1000);
+    await user.save({ validateModifiedOnly: true });
+
+    const frontend = process.env.FRONTEND_URL || "http://localhost:3000";
+    const resetUrl = `${String(frontend).replace(/\/$/, "")}/reset-password/${resetToken}`;
+
+    const result = await sendMail({
+      to: user.email,
+      subject: "Reset your Market Minds password",
+      html: `
+        <p>You requested a password reset.</p>
+        <p><a href="${resetUrl}">Reset your password</a></p>
+        <p>This link expires in one hour. If you did not request this, you can ignore this email.</p>
+      `,
+    });
+
+    if (result.skipped) {
+      console.warn(
+        "[forgotPassword] SMTP not configured; reset URL (dev only):",
+        resetUrl
+      );
+    }
+
+    return res.json({ success: true, message: genericMessage });
+  } catch (error) {
+    console.log("FORGOT PASSWORD ERROR:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Could not process password reset request",
+    });
+  }
+};
+
+// =====================================
+// RESET PASSWORD
+// =====================================
+const resetPassword = async (req, res) => {
+  try {
+    const { token } = req.params;
+    const { password, confirmPassword } = req.body;
+
+    if (!token || !String(token).trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid or expired reset link",
+      });
+    }
+
+    if (!password || String(password).length < 8) {
+      return res.status(400).json({
+        success: false,
+        message: "Password must be at least 8 characters",
+      });
+    }
+
+    if (confirmPassword !== undefined && confirmPassword !== password) {
+      return res.status(400).json({
+        success: false,
+        message: "Passwords do not match",
+      });
+    }
+
+    const hashedToken = crypto
+      .createHash("sha256")
+      .update(String(token).trim())
+      .digest("hex");
+
+    const user = await User.findOne({
+      resetPasswordToken: hashedToken,
+      resetPasswordExpire: { $gt: new Date() },
+    });
+
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid or expired reset token",
+      });
+    }
+
+    user.password = await bcrypt.hash(String(password), 10);
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpire = undefined;
+    await user.save();
+
+    const tokenJwt = jwt.sign({ id: user._id }, JWT_SECRET, {
+      expiresIn: "7d",
+    });
+
+    return res.json({
+      success: true,
+      message: "Password updated successfully",
+      token: tokenJwt,
+      user: sanitizeUserForClient(user),
+    });
+  } catch (error) {
+    console.log("RESET PASSWORD ERROR:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Password reset failed",
     });
   }
 };
@@ -539,6 +743,8 @@ const updateProfile = async (req, res) => {
 module.exports = {
   registerUser,
   loginUser,
+  forgotPassword,
+  resetPassword,
   createUser,
   getUser,
   getTransactions,
