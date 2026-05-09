@@ -25,10 +25,17 @@ mongoose
 // ==========================
 
 // User routes
-app.use("/api/users", require("./routes/userRoutes"));
+app.use("/api/user", require("./routes/userRoutes"));
 
 // Payment routes
-app.use("/api/payments", require("./routes/paymentRoutes"));
+app.use("/api/payment", require("./routes/paymentRoutes"));
+
+// ==========================
+// 🩺 API HEALTH CHECKS
+// ==========================
+app.get("/api/user/test", (req, res) => {
+  res.send("User routes working");
+});
 
 // ==========================
 // 🧪 TEST ROUTE
