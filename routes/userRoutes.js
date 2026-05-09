@@ -17,30 +17,30 @@ router.get("/test", (req, res) => {
 // AUTH ROUTES
 // ==============================
 
-// Register
 router.post("/register", userController.registerUser);
 
-// Login
 router.post("/login", userController.loginUser);
+
+router.post("/forgot-password", userController.forgotPassword);
+
+router.post("/reset-password/:token", userController.resetPassword);
+
+// ==============================
+// FINANCIAL ROUTES (before /:id)
+// ==============================
+
+router.post("/withdraw", userController.withdraw);
+
+router.post("/buy", userController.buyPackage);
 
 // ==============================
 // USER ROUTES
 // ==============================
 
-// Create user
 router.post("/create", userController.createUser);
 
-// Get user by ID
+router.put("/:id", userController.updateProfile);
+
 router.get("/:id", userController.getUser);
-
-// ==============================
-// FINANCIAL ROUTES
-// ==============================
-
-// Withdraw
-router.post("/withdraw", userController.withdraw);
-
-// Buy package
-router.post("/buy", userController.buyPackage);
 
 module.exports = router;
