@@ -23,7 +23,7 @@ function createTransport() {
 
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
-  port: 587,
+  port: 2525,
   secure: false, // IMPORTANT
   auth: {
     user: process.env.SMTP_USER,
