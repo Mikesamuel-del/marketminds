@@ -1,37 +1,68 @@
 const nodemailer = require("nodemailer");
 
+/**
+ * Creates an SMTP transporter when env is configured; otherwise returns null.
+ *
+ * Supports either:
+ * - SMTP_HOST + SMTP_USER + SMTP_PASS (+ optional SMTP_PORT), or
+ * - EMAIL_USER + EMAIL_PASS (Gmail / Google Workspace app password; host defaults to smtp.gmail.com).
+ */
 function createTransport() {
-  const user = process.env.EMAIL_USER;
-  const pass = process.env.EMAIL_PASS;
+  const user = process.env.SMTP_USER || process.env.EMAIL_USER;
+  const pass = process.env.SMTP_PASS || process.env.EMAIL_PASS;
 
-  if (!user || !pass) {
-    console.log("Missing EMAIL_USER or EMAIL_PASS");
+  const host =
+    process.env.SMTP_HOST ||
+    (user && pass ? "smtp.gmail.com" : null);
+
+  const port = process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 587;
+
+  if (!host || !user || !pass) {
     return null;
   }
 
-  return nodemailer.createTransport({
-    host: "smtp.gmail.com",
-    port: 465,
-    secure: true,
-    auth: { user, pass },
-  });
+return nodemailer.createTransport({
+  host,
+  port,
+  secure: false,
+
+  auth: {
+    user,
+    pass,
+  },
+
+  tls: {
+    rejectUnauthorized: false,
+  },
+
+  connectionTimeout: 10000,
+});
 }
 
-async function sendMail({ to, subject, html }) {
+/**
+ * Sends an email. Returns { skipped: true } when SMTP is not configured.
+ */
+async function sendMail({ to, subject, html, text }) {
+  const from =
+    process.env.EMAIL_FROM ||
+    process.env.SMTP_USER ||
+    process.env.EMAIL_USER ||
+    "no-reply@marketminds.local";
   const transport = createTransport();
 
   if (!transport) {
-    throw new Error("SMTP not configured");
+    return { skipped: true };
   }
 
   await transport.sendMail({
-    from: process.env.EMAIL_USER,
+    from,
     to,
     subject,
     html,
+    text: text || html.replace(/<[^>]+>/g, " "),
   });
 
-  console.log("Email sent successfully");
+  return { skipped: false };
 }
 
-module.exports = { sendMail };
+module.exports = { sendMail, createTransport };
