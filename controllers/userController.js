@@ -557,8 +557,6 @@ const buyPackage = async (req, res) => {
 // FORGOT PASSWORD
 // =====================================
 const nodemailer = require("nodemailer");
-const crypto = require("crypto");
-const User = require("../models/User");
 
 // ==============================
 // EMAIL TRANSPORTER
