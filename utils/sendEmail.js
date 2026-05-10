@@ -21,22 +21,17 @@ function createTransport() {
     return null;
   }
 
-return nodemailer.createTransport({
-  host: "smtp.gmail.com",
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST,
   port: 587,
-  secure: false,
-  family: 4,
-
+  secure: false, // IMPORTANT
   auth: {
-    user,
-    pass,
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
   },
-
   tls: {
-    rejectUnauthorized: false,
-  },
-
-  connectionTimeout: 10000,
+    rejectUnauthorized: false
+  }
 });
 }
 
