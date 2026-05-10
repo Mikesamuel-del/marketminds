@@ -556,67 +556,81 @@ const buyPackage = async (req, res) => {
 // =====================================
 // FORGOT PASSWORD
 // =====================================
-const forgotPassword = async (req, res) => {
-  const genericMessage =
-    "If an account exists for that email, we sent reset instructions.";
+const nodemailer = require("nodemailer");
+const crypto = require("crypto");
+const User = require("../models/User");
 
+// ==============================
+// EMAIL TRANSPORTER
+// ==============================
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+});
+
+// ==============================
+// FORGOT PASSWORD
+// ==============================
+exports.forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
 
-    if (!email || !String(email).trim()) {
-      return res.status(400).json({
+    // check if user exists
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return res.status(404).json({
         success: false,
-        message: "Email is required",
+        message: "User not found",
       });
     }
 
-    const normalized = String(email).trim().toLowerCase();
-
-    const user = await User.findOne({
-      email: { $regex: new RegExp(`^${escapeRegex(normalized)}$`, "i") },
-    });
-
-    // Same response whether or not the user exists (avoid email enumeration)
-    if (!user) {
-      return res.json({ success: true, message: genericMessage });
-    }
-
+    // generate reset token
     const resetToken = crypto.randomBytes(32).toString("hex");
-    const hashedToken = crypto
-      .createHash("sha256")
-      .update(resetToken)
-      .digest("hex");
 
-    user.resetPasswordToken = hashedToken;
-    user.resetPasswordExpire = new Date(Date.now() + 60 * 60 * 1000);
-    await user.save({ validateModifiedOnly: true });
+    // save token in database
+    user.resetToken = resetToken;
+    user.resetTokenExpire = Date.now() + 3600000; // 1 hour
 
-    const frontend = process.env.FRONTEND_URL || "http://localhost:3000";
-    const resetUrl = `${String(frontend).replace(/\/$/, "")}/reset-password/${resetToken}`;
+    await user.save();
 
-    const result = await sendMail({
-      to: user.email,
-      subject: "Reset your Market Minds password",
+    // create reset link
+    const resetLink =
+      ${process.env.FRONTEND_URL}/reset-password/${resetToken};
+
+    // send email
+    await transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to: email,
+      subject: "Password Reset",
       html: `
-        <p>You requested a password reset.</p>
-        <p><a href="${resetUrl}">Reset your password</a></p>
-        <p>This link expires in one hour. If you did not request this, you can ignore this email.</p>
+        <h2>Password Reset</h2>
+        <p>Click the link below to reset your password:</p>
+
+        <a href="${resetLink}">
+          Reset Password
+        </a>
+
+        <p>This link expires in 1 hour.</p>
       `,
     });
 
-    if (result.skipped) {
-      console.warn(
-        "[forgotPassword] SMTP not configured; reset URL (dev only):",
-        resetUrl
-      );
-    }
+    // IMPORTANT RESPONSE
+    return res.status(200).json({
+      success: true,
+      message: "Reset email sent successfully",
+    });
 
-    return res.json({ success: true, message: genericMessage });
   } catch (error) {
-    console.log("FORGOT PASSWORD ERROR:", error);
+    console.log(error);
+
     return res.status(500).json({
       success: false,
-      message: "Could not process password reset request",
+      message: "Email sending failed",
+      error: error.message,
     });
   }
 };
