@@ -591,8 +591,7 @@ const forgotPassword = async (req, res) => {
     user.resetPasswordExpire = new Date(Date.now() + 60 * 60 * 1000);
     await user.save({ validateModifiedOnly: true });
 
-    const frontend = process.env.FRONTEND_URL || "dashboard-iota-woad-18.vercel.app
-";
+    const frontend = process.env.FRONTEND_URL || "http://localhost:3000";
     const resetUrl = `${String(frontend).replace(/\/$/, "")}/reset-password/${resetToken}`;
 
     const result = await sendMail({
