@@ -13,26 +13,29 @@ function createTransport() {
 
   const host =
     process.env.SMTP_HOST ||
-    (user && pass ? "smtp.gmail.com" : null);
+    (user && pass ? "smtp-relay.brevo.com" : null);
 
-  const port = process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 587;
+  const port = process.env.SMTP_PORT
+    ? Number(process.env.SMTP_PORT)
+    : 587;
 
   if (!host || !user || !pass) {
+    console.log("SMTP ENV VARIABLES MISSING");
     return null;
   }
 
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: 587,
-  secure: false, // IMPORTANT
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-  tls: {
-    rejectUnauthorized: false
-  }
-});
+  return nodemailer.createTransport({
+    host,
+    port,
+    secure: false,
+    auth: {
+      user,
+      pass,
+    },
+    tls: {
+      rejectUnauthorized: false,
+    },
+  });
 }
 
 /**
