@@ -1,63 +1,55 @@
 const nodemailer = require("nodemailer");
 
-/**
- * Creates an SMTP transporter when env is configured; otherwise returns null.
- *
- * Supports either:
- * - SMTP_HOST + SMTP_USER + SMTP_PASS (+ optional SMTP_PORT), or
- * - EMAIL_USER + EMAIL_PASS (Gmail / Google Workspace app password; host defaults to smtp.gmail.com).
- */
-function createTransport() {
-  const user = process.env.SMTP_USER || process.env.EMAIL_USER;
-  const pass = process.env.SMTP_PASS || process.env.EMAIL_PASS;
+async function createTransport() {
+  const host = process.env.SMTP_HOST;
+  const port = Number(process.env.SMTP_PORT || 587);
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS;
 
-  const host =
-    process.env.SMTP_HOST ||
-    (user && pass ? "smtp-relay.brevo.com" : null);
-
-  const port = process.env.SMTP_PORT
-    ? Number(process.env.SMTP_PORT)
-    : 587;
+  console.log({
+    host,
+    port,
+    user,
+    passExists: !!pass,
+  });
 
   if (!host || !user || !pass) {
     console.log("SMTP ENV VARIABLES MISSING");
     return null;
   }
 
-return nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: Number(process.env.SMTP_PORT),
-  secure: false,
-  requireTLS: true,
+  const transporter = nodemailer.createTransport({
+    host,
+    port,
+    secure: false,
+    requireTLS: true,
 
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
+    auth: {
+      user,
+      pass,
+    },
 
-  connectionTimeout: 10000,
-  greetingTimeout: 10000,
-  socketTimeout: 10000,
-});
+    connectionTimeout: 20000,
+    greetingTimeout: 20000,
+    socketTimeout: 20000,
+  });
+
+  await transporter.verify();
+
+  console.log("SMTP VERIFIED SUCCESSFULLY");
+
+  return transporter;
 }
 
-/**
- * Sends an email. Returns { skipped: true } when SMTP is not configured.
- */
 async function sendMail({ to, subject, html, text }) {
-  const from =
-    process.env.EMAIL_FROM ||
-    process.env.SMTP_USER ||
-    process.env.EMAIL_USER ||
-    "no-reply@marketminds.local";
-  const transport = createTransport();
+  const transport = await createTransport();
 
   if (!transport) {
     return { skipped: true };
   }
 
   await transport.sendMail({
-    from,
+    from: process.env.EMAIL_FROM,
     to,
     subject,
     html,
@@ -67,4 +59,4 @@ async function sendMail({ to, subject, html, text }) {
   return { skipped: false };
 }
 
-module.exports = { sendMail, createTransport };
+module.exports = { sendMail };
