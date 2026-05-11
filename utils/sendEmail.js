@@ -7,7 +7,43 @@ const nodemailer = require("nodemailer");
  * - SMTP_HOST + SMTP_USER + SMTP_PASS (+ optional SMTP_PORT), or
  * - EMAIL_USER + EMAIL_PASS (Gmail / Google Workspace app password; host defaults to smtp.gmail.com).
  */
+function createTransport() {
+  const user = process.env.SMTP_USER || process.env.EMAIL_USER;
+  const pass = process.env.SMTP_PASS || process.env.EMAIL_PASS;
 
+  const host =
+    process.env.SMTP_HOST ||
+    (user && pass ? "smtp.gmail.com" : null);
+
+  const port = process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 587;
+
+  if (!host || !user || !pass) {
+    return null;
+  }
+
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST,
+  port: 587,
+  secure: false, // IMPORTANT
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+  },
+  tls: {
+    rejectUnauthorized: false
+  }
+});
+}
+
+/**
+ * Sends an email. Returns { skipped: true } when SMTP is not configured.
+ */
+async function sendMail({ to, subject, html, text }) {
+  const from =
+    process.env.EMAIL_FROM ||
+    process.env.SMTP_USER ||
+    process.env.EMAIL_USER ||
+    "no-reply@marketminds.local";
   const transport = createTransport();
 
   if (!transport) {
