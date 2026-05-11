@@ -27,3 +27,4 @@ async function sendMail({ to, subject, html }) {
     return { skipped: true };
   }
 }
+module.exports = { sendMail };
