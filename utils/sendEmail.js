@@ -18,21 +18,20 @@ async function createTransport() {
     return null;
   }
 
-  const transporter = nodemailer.createTransport({
-    host,
-    port,
-    secure: false,
-    requireTLS: true,
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST,
+  port: Number(process.env.SMTP_PORT),
+  secure: false,
 
-    auth: {
-      user,
-      pass,
-    },
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+  },
 
-    connectionTimeout: 20000,
-    greetingTimeout: 20000,
-    socketTimeout: 20000,
-  });
+  connectionTimeout: 30000,
+  greetingTimeout: 30000,
+  socketTimeout: 30000,
+});
 
   await transporter.verify();
 
