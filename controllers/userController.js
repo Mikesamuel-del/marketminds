@@ -376,7 +376,7 @@ const withdraw = async (req, res) => {
       });
     }
 
-    // USER MUST HAVE PACKAGE
+    // MUST HAVE PACKAGE
     if (
       !user.package ||
       user.package === "none"
@@ -409,7 +409,7 @@ const withdraw = async (req, res) => {
       });
     }
 
-    // CHECK TOTAL WITHDRAW LIMIT
+    // CHECK MAXIMUM TOTAL WITHDRAW
     const totalWithdrawn = Number(
       user.totalWithdrawn || 0
     );
@@ -443,7 +443,7 @@ const withdraw = async (req, res) => {
         .replace("+", "")
         .replace(/^0/, "254");
 
-    // GET PAYOUT URL FROM ENV
+    // GET INTASEND URL FROM ENV
     const INTASEND_PAYOUT_URL =
       process.env
         .INTASEND_PAYOUT_URL;
@@ -535,6 +535,7 @@ const withdraw = async (req, res) => {
       message:
         error?.response?.data
           ?.detail ||
+        error.message ||
         "Withdrawal failed",
     });
   }
