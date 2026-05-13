@@ -58,7 +58,7 @@ const getPackageRules = (packageType) => {
     case "silver":
       return { minWithdraw: 2500, maxTotalWithdraw: 100000 };
     case "bronze":
-      return { minWithdraw: 3500, maxTotalWithdraw: 20000 };
+      return { minWithdraw: 5, maxTotalWithdraw: 20000 };
     default:
       return null;
   }
