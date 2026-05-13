@@ -388,7 +388,7 @@ const withdraw = async (req, res) => {
       });
     }
 
-    // GET PACKAGE RULES
+    // PACKAGE RULES
     const rules = getPackageRules(
       user.package
     );
@@ -401,7 +401,7 @@ const withdraw = async (req, res) => {
       });
     }
 
-    // CHECK MINIMUM WITHDRAW
+    // MINIMUM WITHDRAW
     if (amount < rules.minWithdraw) {
       return res.status(400).json({
         success: false,
@@ -409,7 +409,7 @@ const withdraw = async (req, res) => {
       });
     }
 
-    // CHECK MAXIMUM TOTAL WITHDRAW
+    // MAX TOTAL WITHDRAW
     const totalWithdrawn = Number(
       user.totalWithdrawn || 0
     );
@@ -443,7 +443,7 @@ const withdraw = async (req, res) => {
         .replace("+", "")
         .replace(/^0/, "254");
 
-    // GET INTASEND URL FROM ENV
+    // GET URL FROM ENV
     const INTASEND_PAYOUT_URL =
       process.env
         .INTASEND_PAYOUT_URL;
@@ -451,12 +451,13 @@ const withdraw = async (req, res) => {
     // SEND MPESA PAYOUT
     const payoutResponse =
       await axios.post(
-        `${INTASEND_PAYOUT_URL}/api/v1/payouts/`
+        `${INTASEND_PAYOUT_URL}/api/v1/payouts/`,
         {
           currency: "KES",
           amount,
           phone_number:
             formattedPhone,
+          method: "MPESA",
           narrative:
             "Market Minds Withdrawal",
         },
@@ -474,7 +475,7 @@ const withdraw = async (req, res) => {
       payoutResponse.data
     );
 
-    // CHECK PAYOUT STATUS
+    // CHECK PAYOUT RESPONSE
     if (
       !payoutResponse.data ||
       payoutResponse.data.status ===
@@ -487,7 +488,7 @@ const withdraw = async (req, res) => {
       });
     }
 
-    // DEDUCT USER BALANCE
+    // DEDUCT BALANCE
     user.balance -= amount;
 
     user.totalWithdrawn =
