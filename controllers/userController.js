@@ -451,7 +451,7 @@ const withdraw = async (req, res) => {
     // SEND MPESA PAYOUT
     const payoutResponse =
       await axios.post(
-        `${INTASEND_PAYOUT_URL}/api/v1/payouts/mpesa/`,
+        `${INTASEND_PAYOUT_URL}/api/v1/payouts/`
         {
           currency: "KES",
           amount,
