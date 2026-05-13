@@ -4,7 +4,15 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const { sendMail } = require("../utils/sendEmail");
+const IntaSend = require("intasend-node");
 
+const intasend = new IntaSend(
+  process.env.INTASEND_PUBLISHABLE_KEY,
+  process.env.INTASEND_SECRET_KEY,
+  false
+);
+
+const payouts = intasend.payouts();
 const JWT_SECRET = process.env.JWT_SECRET || "marketmindssecret";
 
 const escapeRegex = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -350,15 +358,12 @@ const getTransactions = async (req, res) => {
 // =====================================
 // WITHDRAW
 // =====================================
-const axios = require("axios");
-
 const withdraw = async (req, res) => {
   try {
     let { userId, amount } = req.body;
 
     amount = Number(amount);
 
-    // VALIDATE AMOUNT
     if (!amount || amount <= 0) {
       return res.status(400).json({
         success: false,
@@ -366,7 +371,6 @@ const withdraw = async (req, res) => {
       });
     }
 
-    // FIND USER
     const user = await User.findById(userId);
 
     if (!user) {
@@ -376,32 +380,22 @@ const withdraw = async (req, res) => {
       });
     }
 
-    // MUST HAVE PACKAGE
-    if (
-      !user.package ||
-      user.package === "none"
-    ) {
+    if (!user.package || user.package === "none") {
       return res.status(400).json({
         success: false,
-        message:
-          "Buy a package first to withdraw",
+        message: "Buy a package first to withdraw",
       });
     }
 
-    // PACKAGE RULES
-    const rules = getPackageRules(
-      user.package
-    );
+    const rules = getPackageRules(user.package);
 
     if (!rules) {
       return res.status(400).json({
         success: false,
-        message:
-          "Invalid package",
+        message: "Invalid package",
       });
     }
 
-    // MINIMUM WITHDRAW
     if (amount < rules.minWithdraw) {
       return res.status(400).json({
         success: false,
@@ -409,95 +403,45 @@ const withdraw = async (req, res) => {
       });
     }
 
-    // MAX TOTAL WITHDRAW
-    const totalWithdrawn = Number(
-      user.totalWithdrawn || 0
-    );
-
-    if (
-      Number.isFinite(
-        rules.maxTotalWithdraw
-      ) &&
-      totalWithdrawn + amount >
-        rules.maxTotalWithdraw
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: `Withdrawal limit reached for ${user.package}`,
-      });
-    }
-
-    // CHECK BALANCE
     if (user.balance < amount) {
       return res.status(400).json({
         success: false,
-        message:
-          "Insufficient balance",
+        message: "Insufficient balance",
       });
     }
 
-    // FORMAT PHONE NUMBER
-    const formattedPhone =
-      String(user.phone)
-        .replace(/\s/g, "")
-        .replace("+", "")
-        .replace(/^0/, "254");
-
-    // GET URL FROM ENV
-    const INTASEND_PAYOUT_URL =
-      process.env
-        .INTASEND_PAYOUT_URL;
+    // FORMAT PHONE
+    const formattedPhone = String(user.phone)
+      .replace(/\s/g, "")
+      .replace("+", "")
+      .replace(/^0/, "254");
 
     // SEND MPESA PAYOUT
-    const payoutResponse =
-      await axios.post(
-        `${INTASEND_PAYOUT_URL}/api/v1/payouts/`,
+    const response = await payouts.mpesa({
+      currency: "KES",
+      transactions: [
         {
-          currency: "KES",
-          amount,
-          phone_number:
-            formattedPhone,
-          method: "MPESA",
-          narrative:
-            "Market Minds Withdrawal",
+          name: user.name,
+          account: formattedPhone,
+          amount: amount,
+          narrative: "Market Minds Withdrawal",
         },
-        {
-          headers: {
-            Authorization: `Bearer ${process.env.INTASEND_SECRET_KEY}`,
-            "Content-Type":
-              "application/json",
-          },
-        }
-      );
+      ],
+    });
 
     console.log(
-      "INTASEND RESPONSE:",
-      payoutResponse.data
+      "INTASEND PAYOUT:",
+      response
     );
 
-    // CHECK PAYOUT RESPONSE
-    if (
-      !payoutResponse.data ||
-      payoutResponse.data.status ===
-        "FAILED"
-    ) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Withdrawal payout failed",
-      });
-    }
-
-    // DEDUCT BALANCE
+    // DEDUCT ONLY AFTER SUCCESS
     user.balance -= amount;
 
     user.totalWithdrawn =
-      (user.totalWithdrawn || 0) +
-      amount;
+      (user.totalWithdrawn || 0) + amount;
 
     await user.save();
 
-    // SAVE TRANSACTION
     await pushTransaction(user, {
       type: "withdraw",
       direction: "debit",
@@ -506,37 +450,27 @@ const withdraw = async (req, res) => {
       status: "complete",
       source: "intasend",
       note: `Withdraw to ${formattedPhone}`,
-      meta: {
-        payout:
-          payoutResponse.data,
-      },
+      meta: response,
     });
 
-    // SUCCESS RESPONSE
     return res.json({
       success: true,
-      message:
-        "Withdrawal successful",
+      message: "Withdrawal successful",
       balance: user.balance,
-      payout: payoutResponse.data,
-      user: sanitizeUserForClient(
-        user
-      ),
+      payout: response,
+      user: sanitizeUserForClient(user),
     });
 
   } catch (error) {
     console.log(
       "WITHDRAW ERROR:",
-      error?.response?.data ||
-        error.message
+      error
     );
 
     return res.status(500).json({
       success: false,
       message:
-        error?.response?.data
-          ?.detail ||
-        error.message ||
+        error?.message ||
         "Withdrawal failed",
     });
   }
