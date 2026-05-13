@@ -376,7 +376,7 @@ const withdraw = async (req, res) => {
       });
     }
 
-    // MUST HAVE PACKAGE
+    // USER MUST HAVE PACKAGE
     if (
       !user.package ||
       user.package === "none"
@@ -388,6 +388,7 @@ const withdraw = async (req, res) => {
       });
     }
 
+    // GET PACKAGE RULES
     const rules = getPackageRules(
       user.package
     );
@@ -396,7 +397,7 @@ const withdraw = async (req, res) => {
       return res.status(400).json({
         success: false,
         message:
-          "Invalid package. Please buy a package again.",
+          "Invalid package",
       });
     }
 
@@ -408,7 +409,7 @@ const withdraw = async (req, res) => {
       });
     }
 
-    // CHECK MAXIMUM TOTAL WITHDRAW
+    // CHECK TOTAL WITHDRAW LIMIT
     const totalWithdrawn = Number(
       user.totalWithdrawn || 0
     );
@@ -426,11 +427,12 @@ const withdraw = async (req, res) => {
       });
     }
 
-    // CHECK USER BALANCE
+    // CHECK BALANCE
     if (user.balance < amount) {
       return res.status(400).json({
         success: false,
-        message: "Insufficient balance",
+        message:
+          "Insufficient balance",
       });
     }
 
@@ -441,10 +443,15 @@ const withdraw = async (req, res) => {
         .replace("+", "")
         .replace(/^0/, "254");
 
-    // SEND INTASEND MPESA PAYOUT
+    // GET PAYOUT URL FROM ENV
+    const INTASEND_PAYOUT_URL =
+      process.env
+        .INTASEND_PAYOUT_URL;
+
+    // SEND MPESA PAYOUT
     const payoutResponse =
       await axios.post(
-        "https://payment.intasend.com/api/v1/payouts/mpesa/",
+        `${INTASEND_PAYOUT_URL}/api/v1/payouts/mpesa/`,
         {
           currency: "KES",
           amount,
@@ -467,7 +474,7 @@ const withdraw = async (req, res) => {
       payoutResponse.data
     );
 
-    // CHECK IF PAYOUT FAILED
+    // CHECK PAYOUT STATUS
     if (
       !payoutResponse.data ||
       payoutResponse.data.status ===
@@ -480,7 +487,7 @@ const withdraw = async (req, res) => {
       });
     }
 
-    // DEDUCT BALANCE ONLY AFTER SUCCESS
+    // DEDUCT USER BALANCE
     user.balance -= amount;
 
     user.totalWithdrawn =
@@ -504,7 +511,7 @@ const withdraw = async (req, res) => {
       },
     });
 
-    // RESPONSE
+    // SUCCESS RESPONSE
     return res.json({
       success: true,
       message:
