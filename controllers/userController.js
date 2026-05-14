@@ -11,7 +11,7 @@ const IntaSend = require("intasend-node");
 const intasend = new IntaSend(
   process.env.INTASEND_PUBLISHABLE_KEY,
   process.env.INTASEND_SECRET_KEY,
-  false // false = live mode
+  false
 );
 
 const payouts = intasend.payouts();
