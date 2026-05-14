@@ -4,15 +4,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const { sendMail } = require("../utils/sendEmail");
-const IntaSend = require("intasend-node");
 
-const intasend = new IntaSend(
-  process.env.INTASEND_PUBLISHABLE_KEY,
-  process.env.INTASEND_SECRET_KEY,
-  false
-);
-
-const payouts = intasend.payouts();
 const JWT_SECRET = process.env.JWT_SECRET || "marketmindssecret";
 
 const escapeRegex = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -380,19 +372,23 @@ const withdraw = async (req, res) => {
       });
     }
 
-    if (!user.package || user.package === "none") {
+    // MUST HAVE PACKAGE
+    if (
+      !user.package ||
+      user.package === "none"
+    ) {
       return res.status(400).json({
         success: false,
-        message: "Buy a package first to withdraw",
+        message:
+          "Buy a package first to withdraw",
       });
     }
 
     const rules = getPackageRules(user.package);
-
     if (!rules) {
       return res.status(400).json({
         success: false,
-        message: "Invalid package",
+        message: "Invalid package. Please buy a package again.",
       });
     }
 
@@ -403,6 +399,18 @@ const withdraw = async (req, res) => {
       });
     }
 
+    const totalWithdrawn = Number(user.totalWithdrawn || 0);
+    if (
+      Number.isFinite(rules.maxTotalWithdraw) &&
+      totalWithdrawn + amount > rules.maxTotalWithdraw
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: `Withdrawal limit reached for ${user.package}`,
+      });
+    }
+
+    // CHECK BALANCE
     if (user.balance < amount) {
       return res.status(400).json({
         success: false,
@@ -410,37 +418,10 @@ const withdraw = async (req, res) => {
       });
     }
 
-    // FORMAT PHONE
-    const formattedPhone = String(user.phone)
-      .replace(/\s/g, "")
-      .replace("+", "")
-      .replace(/^0/, "254");
-
-    // SEND MPESA PAYOUT
-    const response = await payouts.mpesa({
-      currency: "KES",
-      transactions: [
-        {
-          name: user.name,
-          account: formattedPhone,
-          amount: amount,
-          narrative: "Market Minds Withdrawal",
-        },
-      ],
-    });
-
-    console.log(
-      "INTASEND PAYOUT:",
-      response
-    );
-
-    // DEDUCT ONLY AFTER SUCCESS
     user.balance -= amount;
 
     user.totalWithdrawn =
       (user.totalWithdrawn || 0) + amount;
-
-    await user.save();
 
     await pushTransaction(user, {
       type: "withdraw",
@@ -448,30 +429,23 @@ const withdraw = async (req, res) => {
       amount,
       currency: "KES",
       status: "complete",
-      source: "intasend",
-      note: `Withdraw to ${formattedPhone}`,
-      meta: response,
+      source: "system",
+      note: `Withdraw to ${user.phone}`,
     });
 
-    return res.json({
+    res.json({
       success: true,
       message: "Withdrawal successful",
       balance: user.balance,
-      payout: response,
       user: sanitizeUserForClient(user),
     });
 
   } catch (error) {
-    console.log(
-      "WITHDRAW ERROR:",
-      error
-    );
+    console.log("WITHDRAW ERROR:", error);
 
-    return res.status(500).json({
+    res.status(500).json({
       success: false,
-      message:
-        error?.message ||
-        "Withdrawal failed",
+      message: "Withdrawal failed",
     });
   }
 };
@@ -646,7 +620,6 @@ const forgotPassword = async (req, res) => {
     });
   }
 };
-
 
 // =====================================
 // RESET PASSWORD
