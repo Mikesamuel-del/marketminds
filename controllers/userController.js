@@ -12,7 +12,9 @@ const intasend = new IntaSend(
   false
 );
 
-intasend.payouts.mpesa()
+const payouts = intasend.payouts();
+
+await payouts.mpesa({...})
 const JWT_SECRET = process.env.JWT_SECRET || "marketmindssecret";
 
 const escapeRegex = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
