@@ -481,8 +481,7 @@ const withdraw = async (req, res) => {
 // =====================================
 const buyPackage = async (req, res) => {
   try {
-    const { userId, packageType } =
-      req.body;
+    const { userId, packageType } = req.body;
 
     const prices = {
       gold: 500,
@@ -496,9 +495,7 @@ const buyPackage = async (req, res) => {
       bronze: 45,
     };
 
-    const user = await User.findById(
-      userId
-    );
+    const user = await User.findById(userId);
 
     if (!user) {
       return res.status(404).json({
@@ -506,8 +503,7 @@ const buyPackage = async (req, res) => {
       });
     }
 
-    const price =
-      prices[packageType];
+    const price = prices[packageType];
 
     if (!price) {
       return res.status(400).json({
@@ -519,16 +515,13 @@ const buyPackage = async (req, res) => {
     if (user.balance < price) {
       return res.status(400).json({
         success: false,
-        message:
-          "Insufficient balance",
+        message: "Insufficient balance",
       });
     }
 
     // BUY PACKAGE
     user.balance -= price;
     user.package = packageType;
-
-    await user.save();
 
     await pushTransaction(user, {
       type: "package_purchase",
@@ -541,77 +534,46 @@ const buyPackage = async (req, res) => {
       meta: { packageType },
     });
 
-    // REFERRAL BONUS
+    // REFERRAL BONUS (prefer explicit referrerId; fall back to legacy code match)
     let referrer = null;
-
     if (user.referrerId) {
-      referrer =
-        await User.findById(
-          user.referrerId
-        );
+      referrer = await User.findById(user.referrerId);
     }
-
-    if (
-      !referrer &&
-      user.referredBy
-    ) {
-      referrer =
-        await resolveReferrerByCode(
-          user.referredBy
-        );
+    if (!referrer && user.referredBy) {
+      referrer = await resolveReferrerByCode(user.referredBy);
     }
 
     if (referrer) {
-      const bonus =
-        referralEarnings[
-          packageType
-        ];
+      const bonus = referralEarnings[packageType];
 
       referrer.balance += bonus;
 
       referrer.referral =
-        (referrer.referral || 0) +
-        bonus;
+        (referrer.referral || 0) + bonus;
 
-      await referrer.save();
-
-      await pushTransaction(
-        referrer,
-        {
-          type:
-            "referral_bonus",
-          direction: "credit",
-          amount: bonus,
-          currency: "KES",
-          status: "complete",
-          source: "system",
-          note: `Referral bonus from ${user.email}`,
-          meta: {
-            fromUserId:
-              user._id,
-            packageType,
-          },
-        }
-      );
+      await pushTransaction(referrer, {
+        type: "referral_bonus",
+        direction: "credit",
+        amount: bonus,
+        currency: "KES",
+        status: "complete",
+        source: "system",
+        note: `Referral bonus from ${user.email}`,
+        meta: { fromUserId: user._id, packageType },
+      });
     }
 
-    return res.json({
+    res.json({
       success: true,
       message: `${packageType} package purchased successfully`,
       balance: user.balance,
-      user:
-        sanitizeUserForClient(
-          user
-        ),
+      user: sanitizeUserForClient(user),
     });
 
   } catch (error) {
-    console.log(
-      "BUY PACKAGE ERROR:",
-      error
-    );
+    console.log("BUY PACKAGE ERROR:", error);
 
-    return res.status(500).json({
+    res.status(500).json({
       error: "Purchase failed",
     });
   }
