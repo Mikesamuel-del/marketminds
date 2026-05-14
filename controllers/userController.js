@@ -12,7 +12,7 @@ const intasend = new IntaSend(
   false
 );
 
-const payouts = intasend.payouts();
+intasend.payouts.mpesa()
 const JWT_SECRET = process.env.JWT_SECRET || "marketmindssecret";
 
 const escapeRegex = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -367,7 +367,7 @@ const withdraw = async (req, res) => {
     if (!amount || amount <= 0) {
       return res.status(400).json({
         success: false,
-        message: "Invalid withdrawal amount",
+        message: "Invalid amount",
       });
     }
 
@@ -380,29 +380,7 @@ const withdraw = async (req, res) => {
       });
     }
 
-    if (!user.package || user.package === "none") {
-      return res.status(400).json({
-        success: false,
-        message: "Buy a package first to withdraw",
-      });
-    }
-
-    const rules = getPackageRules(user.package);
-
-    if (!rules) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid package",
-      });
-    }
-
-    if (amount < rules.minWithdraw) {
-      return res.status(400).json({
-        success: false,
-        message: `Minimum withdrawal for ${user.package} is KES ${rules.minWithdraw}`,
-      });
-    }
-
+    // CHECK BALANCE
     if (user.balance < amount) {
       return res.status(400).json({
         success: false,
@@ -411,36 +389,39 @@ const withdraw = async (req, res) => {
     }
 
     // FORMAT PHONE
-    const formattedPhone = String(user.phone)
+    let phone = String(user.phone)
       .replace(/\s/g, "")
-      .replace("+", "")
-      .replace(/^0/, "254");
+      .replace("+", "");
+
+    if (phone.startsWith("0")) {
+      phone = "254" + phone.substring(1);
+    }
 
     // SEND MPESA PAYOUT
-    const response = await payouts.mpesa({
+    const payout = await intasend.payouts.mpesa({
       currency: "KES",
       transactions: [
         {
           name: user.name,
-          account: formattedPhone,
+          account: phone,
           amount: amount,
           narrative: "Market Minds Withdrawal",
         },
       ],
     });
 
-    console.log(
-      "INTASEND PAYOUT:",
-      response
-    );
+    console.log("PAYOUT RESPONSE:", payout);
 
-    // DEDUCT ONLY AFTER SUCCESS
+    // SUCCESS CHECK
+    if (!payout) {
+      return res.status(400).json({
+        success: false,
+        message: "Payout failed",
+      });
+    }
+
+    // DEDUCT BALANCE
     user.balance -= amount;
-
-    user.totalWithdrawn =
-      (user.totalWithdrawn || 0) + amount;
-
-    await user.save();
 
     await pushTransaction(user, {
       type: "withdraw",
@@ -449,32 +430,33 @@ const withdraw = async (req, res) => {
       currency: "KES",
       status: "complete",
       source: "intasend",
-      note: `Withdraw to ${formattedPhone}`,
-      meta: response,
+      note: `Withdraw to ${phone}`,
+      meta: payout,
     });
+
+    await user.save();
 
     return res.json({
       success: true,
       message: "Withdrawal successful",
       balance: user.balance,
-      payout: response,
-      user: sanitizeUserForClient(user),
+      payout,
     });
 
   } catch (error) {
-    console.log(
-      "WITHDRAW ERROR:",
-      error
-    );
+
+    console.log("WITHDRAW ERROR:", error);
 
     return res.status(500).json({
       success: false,
       message:
-        error?.message ||
+        error?.response?.data?.message ||
+        error.message ||
         "Withdrawal failed",
     });
   }
 };
+
 
 // =====================================
 // BUY PACKAGE
