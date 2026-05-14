@@ -6,10 +6,12 @@ const crypto = require("crypto");
 const { sendMail } = require("../utils/sendEmail");
 const IntaSend = require("intasend-node");
 
+const IntaSend = require("intasend-node");
+
 const intasend = new IntaSend(
   process.env.INTASEND_PUBLISHABLE_KEY,
   process.env.INTASEND_SECRET_KEY,
-  process.env.INTASEND_TEST === "true"
+  false // false = live mode
 );
 
 const payouts = intasend.payouts();
