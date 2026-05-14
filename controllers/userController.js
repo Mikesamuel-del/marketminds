@@ -9,7 +9,7 @@ const IntaSend = require("intasend-node");
 const intasend = new IntaSend(
   process.env.INTASEND_PUBLISHABLE_KEY,
   process.env.INTASEND_SECRET_KEY,
-  false
+  process.env.INTASEND_TEST === "true"
 );
 
 const payouts = intasend.payouts();
