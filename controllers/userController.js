@@ -13,8 +13,6 @@ const intasend = new IntaSend(
 );
 
 const payouts = intasend.payouts();
-
-await payouts.mpesa({...})
 const JWT_SECRET = process.env.JWT_SECRET || "marketmindssecret";
 
 const escapeRegex = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -362,23 +360,53 @@ const getTransactions = async (req, res) => {
 // =====================================
 const withdraw = async (req, res) => {
   try {
+
     let { userId, amount } = req.body;
 
+    // CONVERT AMOUNT
     amount = Number(amount);
 
+    // VALIDATE AMOUNT
     if (!amount || amount <= 0) {
       return res.status(400).json({
         success: false,
-        message: "Invalid amount",
+        message: "Invalid withdrawal amount",
       });
     }
 
+    // FIND USER
     const user = await User.findById(userId);
 
     if (!user) {
       return res.status(404).json({
         success: false,
         message: "User not found",
+      });
+    }
+
+    // CHECK PACKAGE
+    if (!user.package || user.package === "none") {
+      return res.status(400).json({
+        success: false,
+        message: "Buy a package first to withdraw",
+      });
+    }
+
+    // PACKAGE RULES
+    const rules = getPackageRules(user.package);
+
+    if (!rules) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid package",
+      });
+    }
+
+    // MINIMUM WITHDRAWAL
+    if (amount < rules.minWithdraw) {
+      return res.status(400).json({
+        success: false,
+        message: `Minimum withdrawal for ${user.package} is KES ${rules.minWithdraw}`,
       });
     }
 
@@ -390,41 +418,54 @@ const withdraw = async (req, res) => {
       });
     }
 
-    // FORMAT PHONE
-    let phone = String(user.phone)
+    // FORMAT PHONE NUMBER
+    let formattedPhone = String(user.phone)
       .replace(/\s/g, "")
       .replace("+", "");
 
-    if (phone.startsWith("0")) {
-      phone = "254" + phone.substring(1);
+    // CHANGE 07XXXXXXXX -> 2547XXXXXXXX
+    if (formattedPhone.startsWith("0")) {
+      formattedPhone =
+        "254" + formattedPhone.substring(1);
     }
 
+    console.log("PHONE:", formattedPhone);
+    console.log("AMOUNT:", amount);
+
     // SEND MPESA PAYOUT
-    const payout = await intasend.payouts.mpesa({
+    const response = await payouts.mpesa({
       currency: "KES",
       transactions: [
         {
           name: user.name,
-          account: phone,
+          account: formattedPhone,
           amount: amount,
           narrative: "Market Minds Withdrawal",
         },
       ],
     });
 
-    console.log("PAYOUT RESPONSE:", payout);
+    console.log(
+      "INTASEND RESPONSE:",
+      JSON.stringify(response, null, 2)
+    );
 
-    // SUCCESS CHECK
-    if (!payout) {
+    // CHECK RESPONSE
+    if (!response) {
       return res.status(400).json({
         success: false,
-        message: "Payout failed",
+        message: "Withdrawal failed",
       });
     }
 
     // DEDUCT BALANCE
     user.balance -= amount;
 
+    // TRACK TOTAL WITHDRAWN
+    user.totalWithdrawn =
+      (user.totalWithdrawn || 0) + amount;
+
+    // SAVE TRANSACTION
     await pushTransaction(user, {
       type: "withdraw",
       direction: "debit",
@@ -432,22 +473,34 @@ const withdraw = async (req, res) => {
       currency: "KES",
       status: "complete",
       source: "intasend",
-      note: `Withdraw to ${phone}`,
-      meta: payout,
+      note: `Withdraw to ${formattedPhone}`,
+      meta: response,
     });
 
+    // SAVE USER
     await user.save();
 
+    // RESPONSE
     return res.json({
       success: true,
       message: "Withdrawal successful",
       balance: user.balance,
-      payout,
+      payout: response,
+      user: sanitizeUserForClient(user),
     });
 
   } catch (error) {
 
-    console.log("WITHDRAW ERROR:", error);
+    console.log("WITHDRAW ERROR:");
+    console.log(error);
+
+    // SHOW FULL INTASEND ERROR
+    if (error.response) {
+      console.log(
+        "INTASEND ERROR:",
+        error.response.data
+      );
+    }
 
     return res.status(500).json({
       success: false,
@@ -458,7 +511,6 @@ const withdraw = async (req, res) => {
     });
   }
 };
-
 
 // =====================================
 // BUY PACKAGE
