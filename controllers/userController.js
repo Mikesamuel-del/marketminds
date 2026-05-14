@@ -534,22 +534,34 @@ const buyPackage = async (req, res) => {
       meta: { packageType },
     });
 
-    // REFERRAL BONUS (prefer explicit referrerId; fall back to legacy code match)
+    // REFERRAL BONUS
     let referrer = null;
+
     if (user.referrerId) {
-      referrer = await User.findById(user.referrerId);
+      referrer = await User.findById(
+        user.referrerId
+      );
     }
-    if (!referrer && user.referredBy) {
-      referrer = await resolveReferrerByCode(user.referredBy);
+
+    if (
+      !referrer &&
+      user.referredBy
+    ) {
+      referrer =
+        await resolveReferrerByCode(
+          user.referredBy
+        );
     }
 
     if (referrer) {
-      const bonus = referralEarnings[packageType];
+      const bonus =
+        referralEarnings[packageType];
 
       referrer.balance += bonus;
 
       referrer.referral =
-        (referrer.referral || 0) + bonus;
+        (referrer.referral || 0) +
+        bonus;
 
       await pushTransaction(referrer, {
         type: "referral_bonus",
@@ -559,9 +571,17 @@ const buyPackage = async (req, res) => {
         status: "complete",
         source: "system",
         note: `Referral bonus from ${user.email}`,
-        meta: { fromUserId: user._id, packageType },
+        meta: {
+          fromUserId: user._id,
+          packageType,
+        },
       });
+
+      await referrer.save();
     }
+
+    // SAVE USER CHANGES
+    await user.save();
 
     res.json({
       success: true,
@@ -571,14 +591,17 @@ const buyPackage = async (req, res) => {
     });
 
   } catch (error) {
-    console.log("BUY PACKAGE ERROR:", error);
+    console.log(
+      "BUY PACKAGE ERROR:",
+      error
+    );
 
     res.status(500).json({
       error: "Purchase failed",
     });
   }
 };
-
+  
 // =====================================
 // FORGOT PASSWORD
 // =====================================
