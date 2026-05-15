@@ -54,7 +54,7 @@ const sanitizeUserForClient = (user) => ({
 const getPackageRules = (packageType) => {
   switch ((packageType || "none").toLowerCase()) {
     case "gold":
-      return { minWithdraw: 20, maxTotalWithdraw: Infinity };
+      return { minWithdraw: 2000, maxTotalWithdraw: Infinity };
     case "silver":
       return { minWithdraw: 2500, maxTotalWithdraw: 100000 };
     case "bronze":
