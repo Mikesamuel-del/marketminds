@@ -5,7 +5,9 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 
 const app = express();
+const adgemRoutes = require("./routes/adgemRoutes");
 
+app.use("/api/adgem", adgemRoutes);
 // ==========================
 // 🔧 MIDDLEWARE
 // ==========================
