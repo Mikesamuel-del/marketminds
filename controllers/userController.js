@@ -433,25 +433,23 @@ const withdraw = async (req, res) => {
     console.log("AMOUNT:", amount);
 
     // SEND MPESA PAYOUT
-    const response = await payouts.mpesa({
-      currency: "KES",
-      transactions: [
-        {
-          name: user.name,
-          account: formattedPhone,
-          amount: amount,
-          narrative: "Market Minds Withdrawal",
-        },
-         ],
-  requires_approval: "NO"
-};
-      ],
-    });
+const response = await payouts.mpesa({
+  currency: "KES",
+  requires_approval: "NO",
+  transactions: [
+    {
+      name: user.name,
+      account: formattedPhone,
+      amount: amount,
+      narrative: "Market Minds Withdrawal",
+    },
+  ],
+});
 
-    console.log(
-      "INTASEND RESPONSE:",
-      JSON.stringify(response, null, 2)
-    );
+console.log(
+  "INTASEND RESPONSE:",
+  JSON.stringify(response, null, 2)
+);
 
     // CHECK RESPONSE
     if (!response) {
