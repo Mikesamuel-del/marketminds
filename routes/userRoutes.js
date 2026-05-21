@@ -14,19 +14,7 @@ router.get("/test", (req, res) => {
 });
 
 // ==============================
-// AUTH ROUTES
-// ==============================
-
-router.post("/register", userController.registerUser);
-
-router.post("/login", userController.loginUser);
-
-router.post("/forgot-password", userController.forgotPassword);
-
-router.post("/reset-password/:token", userController.resetPassword);
-
-// ==============================
-// WEBHOOK / POSTBACK ROUTES
+// WEBHOOK / POSTBACK ROUTES (MUST COME BEFORE /:id)
 // ==============================
 
 // TimeWall postback
@@ -42,9 +30,25 @@ router.post(
 );
 
 // ==============================
+// AUTH ROUTES
+// ==============================
+router.post("/register", userController.registerUser);
+
+router.post("/login", userController.loginUser);
+
+router.post(
+  "/forgot-password",
+  userController.forgotPassword
+);
+
+router.post(
+  "/reset-password/:token",
+  userController.resetPassword
+);
+
+// ==============================
 // FINANCIAL ROUTES
 // ==============================
-
 router.post("/withdraw", userController.withdraw);
 
 router.post("/buy", userController.buyPackage);
@@ -53,6 +57,7 @@ router.post("/buy", userController.buyPackage);
 // USER ROUTES
 // ==============================
 
+// IMPORTANT: keep these LAST
 router.post("/create", userController.createUser);
 
 router.put("/:id", userController.updateProfile);
@@ -62,5 +67,4 @@ router.get("/:id", userController.getUser);
 // ==============================
 // EXPORT ROUTER
 // ==============================
-
 module.exports = router;
