@@ -919,25 +919,25 @@ const updateProfile = async (req, res) => {
 // ======================================================
 const timewallPostback = async (req, res) => {
   try {
-    const allowedIPs = [
-      "51.81.120.73",
-      "142.111.248.18",
-    ];
+// IP CHECK DISABLED TEMPORARILY (FOR TESTING)
+// const allowedIPs = [
+//   "51.81.120.73",
+//   "142.111.248.18",
+// ];
 
-    const requestIP =
-      req.headers["x-forwarded-for"]?.split(",")[0] ||
-      req.socket.remoteAddress ||
-      req.ip;
+// const requestIP =
+//   req.headers["x-forwarded-for"]?.split(",")[0] ||
+//   req.socket.remoteAddress ||
+//   req.ip;
 
-    const cleanedIP = String(requestIP).replace("::ffff:", "");
+// const cleanedIP = String(requestIP).replace("::ffff:", "");
 
-    if (!allowedIPs.includes(cleanedIP)) {
-      return res.status(403).json({
-        success: false,
-        message: "Unauthorized IP",
-      });
-    }
-
+// if (!allowedIPs.includes(cleanedIP)) {
+//   return res.status(403).json({
+//     success: false,
+//     message: "Unauthorized IP",
+//   });
+// }
     const {
       userID,
       reward,
