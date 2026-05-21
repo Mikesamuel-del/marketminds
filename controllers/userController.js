@@ -895,6 +895,47 @@ const updateProfile = async (req, res) => {
   }
 };
 
+const timewallPostback = async (req, res) => {
+  try {
+    const { userid, amount, txid } = req.query;
+
+    const user = await User.findById(userid);
+
+    if (!user) {
+      return res.status(404).send("User not found");
+    }
+
+    // prevent duplicate rewards
+    const exists = user.transactions?.find(
+      (tx) => tx.meta?.txid === txid
+    );
+
+    if (exists) {
+      return res.status(200).send("Already processed");
+    }
+
+    user.balance += Number(amount);
+
+    await pushTransaction(user, {
+      type: "offerwall",
+      direction: "credit",
+      amount: Number(amount),
+      currency: "KES",
+      status: "complete",
+      source: "timewall",
+      note: "TimeWall reward",
+      meta: { txid },
+    });
+
+    await user.save();
+
+    return res.status(200).send("OK");
+  } catch (error) {
+    console.log("TIMEWALL ERROR:", error);
+    return res.status(500).send("ERROR");
+  }
+};
+
 // =====================================
 // EXPORTS
 // =====================================
@@ -909,7 +950,6 @@ module.exports = {
   updateProfile,
   withdraw,
   buyPackage,
-
-  // ✅ ADDED EXPORT
   intasendWebhook,
+  timewallPostback,
 };
