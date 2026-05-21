@@ -915,43 +915,30 @@ const updateProfile = async (req, res) => {
 };
 
 // ======================================================
-// 🚀 TIMEWALL POSTBACK ROUTE
+// 🚀 TIMEWALL POSTBACK ROUTE (FIXED)
 // ======================================================
 const timewallPostback = async (req, res) => {
   try {
-// IP CHECK DISABLED TEMPORARILY (FOR TESTING)
-// const allowedIPs = [
-//   "51.81.120.73",
-//   "142.111.248.18",
-// ];
+    // ==============================
+    // 1. INPUTS (SAFE NORMALIZATION)
+    // ==============================
+    const userID = String(req.query.userID || "").trim();
+    const reward = Number(req.query.reward || 0);
+    const revenueRaw = req.query.revenue || "0";
+    const revenue = String(Number(revenueRaw).toFixed(2)); // IMPORTANT FIX
+    const hash = String(req.query.hash || "").trim();
 
-// const requestIP =
-//   req.headers["x-forwarded-for"]?.split(",")[0] ||
-//   req.socket.remoteAddress ||
-//   req.ip;
-
-// const cleanedIP = String(requestIP).replace("::ffff:", "");
-
-// if (!allowedIPs.includes(cleanedIP)) {
-//   return res.status(403).json({
-//     success: false,
-//     message: "Unauthorized IP",
-//   });
-// }
-    const {
-      userID,
-      reward,
-      revenue,
-      hash,
-      offer_name,
-      offer_id,
-      transaction_id,
-    } = req.query;
+    const offer_name = req.query.offer_name || "Offer completed";
+    const offer_id = req.query.offer_id;
+    const transaction_id = req.query.transaction_id;
 
     if (!userID || !reward || !revenue || !hash) {
       return res.status(400).send("Missing parameters");
     }
 
+    // ==============================
+    // 2. HASH VALIDATION (FIXED)
+    // ==============================
     const generatedHash = crypto
       .createHash("sha256")
       .update(
@@ -959,39 +946,50 @@ const timewallPostback = async (req, res) => {
       )
       .digest("hex");
 
+    console.log("TIMEWALL DEBUG:", {
+      userID,
+      revenue,
+      receivedHash: hash,
+      generatedHash,
+    });
+
     if (generatedHash !== hash) {
       return res.status(403).send("Invalid hash");
     }
 
+    // ==============================
+    // 3. FIND USER
+    // ==============================
     const user = await User.findById(userID);
 
     if (!user) {
       return res.status(404).send("User not found");
     }
 
-    const alreadyProcessed =
-      user.transactions?.find(
-        (tx) =>
-          tx.meta?.transaction_id === transaction_id
-      );
+    // ==============================
+    // 4. PREVENT DUPLICATES
+    // ==============================
+    const alreadyProcessed = user.transactions?.find(
+      (tx) => tx.meta?.transaction_id === transaction_id
+    );
 
     if (alreadyProcessed) {
       return res.status(200).send("Duplicate ignored");
     }
 
-    const amount = Number(reward);
-
-    user.balance =
-      Number(user.balance || 0) + amount;
+    // ==============================
+    // 5. CREDIT USER
+    // ==============================
+    user.balance = Number(user.balance || 0) + reward;
 
     await pushTransaction(user, {
       type: "offerwall_reward",
       direction: "credit",
-      amount,
+      amount: reward,
       currency: "KES",
       status: "complete",
       source: "timewall",
-      note: offer_name || "Offer completed",
+      note: offer_name,
       meta: {
         offer_id,
         offer_name,
@@ -1002,18 +1000,16 @@ const timewallPostback = async (req, res) => {
 
     await user.save();
 
+    // ==============================
+    // 6. SUCCESS RESPONSE
+    // ==============================
     return res.status(200).send("OK");
 
   } catch (error) {
-    console.log(
-      "TIMEWALL POSTBACK ERROR:",
-      error
-    );
-
+    console.log("TIMEWALL POSTBACK ERROR:", error);
     return res.status(500).send("Server error");
   }
 };
-
 // =====================================
 // EXPORTS
 // =====================================
