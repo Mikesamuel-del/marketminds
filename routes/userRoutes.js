@@ -23,6 +23,8 @@ router.get("/timewall/postback", timewallPostback);
 
 router.post("/login", userController.loginUser);
 
+router.post("/intasend/webhook", intasendWebhook);
+
 router.post("/forgot-password", userController.forgotPassword);
 
 router.post("/reset-password/:token", userController.resetPassword);
