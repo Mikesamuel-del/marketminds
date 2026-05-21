@@ -936,6 +936,106 @@ const timewallPostback = async (req, res) => {
   }
 };
 
+// ======================================================
+// 🚀 TIMEWALL POSTBACK ROUTE
+// ======================================================
+const timewallPostback = async (req, res) => {
+  try {
+    const allowedIPs = [
+      "51.81.120.73",
+      "142.111.248.18",
+    ];
+
+    const requestIP =
+      req.headers["x-forwarded-for"]?.split(",")[0] ||
+      req.socket.remoteAddress ||
+      req.ip;
+
+    const cleanedIP = String(requestIP).replace("::ffff:", "");
+
+    if (!allowedIPs.includes(cleanedIP)) {
+      return res.status(403).json({
+        success: false,
+        message: "Unauthorized IP",
+      });
+    }
+
+    const {
+      userID,
+      reward,
+      revenue,
+      hash,
+      offer_name,
+      offer_id,
+      transaction_id,
+    } = req.query;
+
+    if (!userID || !reward || !revenue || !hash) {
+      return res.status(400).send("Missing parameters");
+    }
+
+    const generatedHash = crypto
+      .createHash("sha256")
+      .update(
+        `${userID}${revenue}${process.env.TIMEWALL_SECRET_KEY}`
+      )
+      .digest("hex");
+
+    if (generatedHash !== hash) {
+      return res.status(403).send("Invalid hash");
+    }
+
+    const user = await User.findById(userID);
+
+    if (!user) {
+      return res.status(404).send("User not found");
+    }
+
+    const alreadyProcessed =
+      user.transactions?.find(
+        (tx) =>
+          tx.meta?.transaction_id === transaction_id
+      );
+
+    if (alreadyProcessed) {
+      return res.status(200).send("Duplicate ignored");
+    }
+
+    const amount = Number(reward);
+
+    user.balance =
+      Number(user.balance || 0) + amount;
+
+    await pushTransaction(user, {
+      type: "offerwall_reward",
+      direction: "credit",
+      amount,
+      currency: "KES",
+      status: "complete",
+      source: "timewall",
+      note: offer_name || "Offer completed",
+      meta: {
+        offer_id,
+        offer_name,
+        revenue,
+        transaction_id,
+      },
+    });
+
+    await user.save();
+
+    return res.status(200).send("OK");
+
+  } catch (error) {
+    console.log(
+      "TIMEWALL POSTBACK ERROR:",
+      error
+    );
+
+    return res.status(500).send("Server error");
+  }
+};
+
 // =====================================
 // EXPORTS
 // =====================================
