@@ -857,72 +857,60 @@ const updateProfile = async (req, res) => {
     const { id } = req.params;
     const { name, phone } = req.body;
 
+    // Validate user ID
     if (!id || !mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ success: false, message: "Invalid user ID" });
+      return res.status(400).json({
+        success: false,
+        message: "Invalid user ID",
+      });
     }
 
+    // Find user
     const user = await User.findById(id);
     if (!user) {
-      return res.status(404).json({ success: false, message: "User not found" });
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
     }
 
+    // Update phone if provided and changed
     if (phone && phone !== user.phone) {
-      const exists = await User.findOne({ phone, _id: { $ne: id } });
-      if (exists) {
+      const phoneExists = await User.findOne({
+        phone,
+        _id: { $ne: id },
+      });
+
+      if (phoneExists) {
         return res.status(400).json({
           success: false,
           message: "Phone already exists",
         });
       }
+
       user.phone = phone;
     }
 
-    if (name) user.name = name;
+    // Update name if provided
+    if (name) {
+      user.name = name;
+    }
 
+    // Save changes
     await user.save();
 
     return res.json({
       success: true,
-      message: "Profile updated",
+      message: "Profile updated successfully",
       user: sanitizeUserForClient(user),
     });
   } catch (error) {
     console.log("UPDATE PROFILE ERROR:", error);
+
     return res.status(500).json({
       success: false,
       message: "Profile update failed",
     });
-  }
-};
-
-    // prevent duplicate rewards
-    const exists = user.transactions?.find(
-      (tx) => tx.meta?.txid === txid
-    );
-
-    if (exists) {
-      return res.status(200).send("Already processed");
-    }
-
-    user.balance += Number(amount);
-
-    await pushTransaction(user, {
-      type: "offerwall",
-      direction: "credit",
-      amount: Number(amount),
-      currency: "KES",
-      status: "complete",
-      source: "timewall",
-      note: "TimeWall reward",
-      meta: { txid },
-    });
-
-    await user.save();
-
-    return res.status(200).send("OK");
-  } catch (error) {
-    console.log("TIMEWALL ERROR:", error);
-    return res.status(500).send("ERROR");
   }
 };
 
