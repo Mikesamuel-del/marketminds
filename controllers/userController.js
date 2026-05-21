@@ -895,16 +895,6 @@ const updateProfile = async (req, res) => {
   }
 };
 
-const timewallPostback = async (req, res) => {
-  try {
-    const { userid, amount, txid } = req.query;
-
-    const user = await User.findById(userid);
-
-    if (!user) {
-      return res.status(404).send("User not found");
-    }
-
     // prevent duplicate rewards
     const exists = user.transactions?.find(
       (tx) => tx.meta?.txid === txid
