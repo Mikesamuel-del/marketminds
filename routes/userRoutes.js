@@ -19,18 +19,30 @@ router.get("/test", (req, res) => {
 
 router.post("/register", userController.registerUser);
 
-router.get("/timewall/postback", timewallPostback);
-
 router.post("/login", userController.loginUser);
-
-router.post("/intasend/webhook", intasendWebhook);
 
 router.post("/forgot-password", userController.forgotPassword);
 
 router.post("/reset-password/:token", userController.resetPassword);
 
 // ==============================
-// FINANCIAL ROUTES (before /:id)
+// WEBHOOK / POSTBACK ROUTES
+// ==============================
+
+// TimeWall postback
+router.get(
+  "/timewall/postback",
+  userController.timewallPostback
+);
+
+// IntaSend webhook
+router.post(
+  "/intasend/webhook",
+  userController.intasendWebhook
+);
+
+// ==============================
+// FINANCIAL ROUTES
 // ==============================
 
 router.post("/withdraw", userController.withdraw);
@@ -46,5 +58,9 @@ router.post("/create", userController.createUser);
 router.put("/:id", userController.updateProfile);
 
 router.get("/:id", userController.getUser);
+
+// ==============================
+// EXPORT ROUTER
+// ==============================
 
 module.exports = router;
